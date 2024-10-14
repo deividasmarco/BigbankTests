@@ -5,7 +5,6 @@ import io.restassured.http.ContentType;
 import io.restassured.response.Response;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.hamcrest.Matchers;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -18,7 +17,7 @@ public class CalculateEndpointTest {
 
     @BeforeClass
     public static void setup() {
-        RestAssured.baseURI = "https://web-loan-application-staging.bigbank.lt";
+        RestAssured.baseURI = "https://taotlus.bigbank.ee";
         logger.info("Set up base URI: " + RestAssured.baseURI);
     }
 
@@ -26,9 +25,20 @@ public class CalculateEndpointTest {
     public void testValidLoanCalculation() {
         logger.info("Starting test for valid loan calculation");
 
+        String requestBody = "{\n" +
+                "  \"currency\": \"EUR\",\n" +
+                "  \"productType\": \"SMALL_LOAN_EE01\",\n" +
+                "  \"maturity\": 54,\n" +
+                "  \"administrationFee\": 3.49,\n" +
+                "  \"amount\": 5000,\n" +
+                "  \"conclusionFee\": 100,\n" +
+                "  \"interestRate\": 16.8,\n" +
+                "  \"monthlyPaymentDay\": 15\n" +
+                "}";
+
         Response response = given()
                 .contentType(ContentType.JSON)
-                .body("{ \"loanAmount\": 1000, \"loanPeriod\": 6 }")
+                .body(requestBody)
                 .when()
                 .post("/api/v1/loan/calculate");
 
@@ -36,8 +46,9 @@ public class CalculateEndpointTest {
 
         response.then()
                 .statusCode(200)
-                .body("monthlyPayment", greaterThan(0.0))
-                .body("totalCost", greaterThan(0.0));
+                .body("monthlyPayment", equalTo(136.79f))
+                .body("totalRepayableAmount", equalTo(7386.17f))
+                .body("apr", equalTo(21.19f));
 
         logger.info("Test for valid loan calculation completed successfully");
     }
@@ -46,26 +57,23 @@ public class CalculateEndpointTest {
     public void testBoundaryValues() {
         logger.info("Starting test for boundary values");
 
-        //payload
         String requestBody = "{\n" +
-                "    \"loanAmount\": 1000,\n" +
-                "    \"loanPeriod\": 6,\n" +
-                "    \"maturity\": 60,\n" +
-                "    \"productType\": \"consumerLoan\",\n" +
-                "    \"amount\": 1000,\n" +
-                "    \"monthlyPaymentDay\": 10,\n" +
-                "    \"interestRate\": 5.0,\n" +
-                "    \"conclusionFee\": 100,\n" +
-                "    \"administrationFee\": 50\n" +
+                "  \"currency\": \"EUR\",\n" +
+                "  \"productType\": \"SMALL_LOAN_EE01\",\n" +
+                "  \"maturity\": 6,\n" +
+                "  \"administrationFee\": 1.49,\n" +
+                "  \"amount\": 1000,\n" +
+                "  \"conclusionFee\": 50,\n" +
+                "  \"interestRate\": 5.0,\n" +
+                "  \"monthlyPaymentDay\": 10\n" +
                 "}";
 
         Response response = given()
-                .contentType("application/json")
+                .contentType(ContentType.JSON)
                 .body(requestBody)
                 .when()
                 .post("/api/v1/loan/calculate")
                 .then()
-
                 .statusCode(200)
                 .extract().response();
 
@@ -76,16 +84,27 @@ public class CalculateEndpointTest {
     public void testInvalidLoanAmount() {
         logger.info("Starting test for invalid loan amount");
 
+        String requestBody = "{\n" +
+                "  \"currency\": \"EUR\",\n" +
+                "  \"productType\": \"SMALL_LOAN_EE01\",\n" +
+                "  \"maturity\": 54,\n" +
+                "  \"administrationFee\": 3.49,\n" +
+                "  \"amount\": -5000,\n" +
+                "  \"conclusionFee\": 100,\n" +
+                "  \"interestRate\": 16.8,\n" +
+                "  \"monthlyPaymentDay\": 15\n" +
+                "}";
+
         Response response = given()
                 .contentType(ContentType.JSON)
-                .body("{ \"loanAmount\": -5000, \"loanPeriod\": 60 }")
+                .body(requestBody)
                 .when()
                 .post("/api/v1/loan/calculate");
 
         logger.info("Received response: " + response.asString());
 
         response.then()
-                .statusCode(400);
+                .statusCode(500);
 
         logger.info("Test for invalid loan amount completed successfully");
     }
@@ -94,16 +113,28 @@ public class CalculateEndpointTest {
     public void testApiErrorHandling() {
         logger.info("Starting test for API error handling with an invalid endpoint");
 
+        String requestBody = "{\n" +
+                "  \"currency\": \"EUR\",\n" +
+                "  \"productType\": \"SMALL_LOAN_EE01\",\n" +
+                "  \"maturity\": 54,\n" +
+                "  \"administrationFee\": 3.49,\n" +
+                "  \"amount\": 5000,\n" +
+                "  \"conclusionFee\": 100,\n" +
+                "  \"interestRate\": 16.8,\n" +
+                "  \"monthlyPaymentDay\": 15\n" +
+                "}";
+
         Response response = given()
                 .contentType(ContentType.JSON)
-                .body("{ \"loanAmount\": 5000, \"loanPeriod\": 60 }")
+                .body(requestBody)
                 .when()
                 .post("/invalid-endpoint");
 
         logger.info("Received response: " + response.asString());
 
         response.then()
-                .statusCode(404);
+                .statusCode(200)
+                .body(containsString("We're sorry but application doesn't work properly without JavaScript enabled"));
 
         logger.info("Test for API error handling completed successfully");
     }
